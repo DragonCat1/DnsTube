@@ -1,0 +1,6 @@
+.git
+.gitignore
+.cursor
+**/.DS_Store
+web/node_modules
+cmd/dnstube/web/dist

@@ -1,0 +1,12 @@
+---
+description: Go 代码风格与 DnsTube 后端约定
+globs: "**/*.go"
+alwaysApply: false
+---
+
+# Go（cmd、internal）
+
+- 使用 `context` 传递取消与超时；错误需包装或记录。
+- 与 PostgreSQL 交互仅在 `internal/store`。
+- 可测逻辑放在 `internal/dns` 等包，测试文件与源码同目录 `*_test.go`。
+- 对外 JSON 字段使用 `json` tag（蛇形命名）。

@@ -1,0 +1,11 @@
+---
+description: DnsTube monorepo boundaries and agent workflow
+alwaysApply: true
+---
+
+# DnsTube 核心约定
+
+- 改动前先阅读仓库根目录 `AGENTS.md`。
+- 保持分层：`internal/dns` 不写 SQL；`internal/store` 不处理 HTTP；`internal/api` 只做 HTTP 与 DTO。
+- 变更与需求对齐，避免无关重构。
+- 管理 API 前缀为 `/api/v1/`，需 JWT（登录接口除外）。

@@ -1,0 +1,28 @@
+# Binaries
+/dnstube
+/dnsbench
+*.exe
+*.test
+*.out
+
+# Go
+vendor/
+
+# Node / frontend
+web/node_modules/
+web/dist/
+cmd/dnstube/web/dist/
+*.log
+npm-debug.log*
+
+# Env
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store

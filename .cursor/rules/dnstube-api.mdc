@@ -1,0 +1,68 @@
+---
+description: 管理 REST API 与鉴权
+globs: "internal/api/**/*.go"
+alwaysApply: false
+---
+
+# 管理 API
+
+- 路由前缀 `/api/v1`；**统一 JSON**：`success`、`code`（`0` 成功）、`message`；失败时 `code` 非 `0` 且 `message` 为说明；**对象**接口 `data` 为对象或 `null`；**列表**接口见下文。HTTP 状态码仍表示语义（4xx/5xx）；删除类成功为 **200** + `data: null`。
+- **列表接口**（分页列表、表格数据源等）在实现与演进中须遵守下文「列表请求 / 列表应答 / 对象应答」约定；与上述通用信封并存时，以列表/对象专节为准。
+
+## 列表接口 — 请求（Query）
+
+所有返回列表的管理接口，**查询参数**须支持：
+
+| 参数 | 含义 |
+|------|------|
+| `limit` | 分页大小（每页条数） |
+| `page` | 页码 |
+| `sortBy` | 排序字段 |
+| `sortOrder` | 正序 / 倒序（如 `asc` / `desc`，与具体 handler 文档一致） |
+
+- **`limit` 为 `0`**：表示**不需要分页**（全量或按业务约定的一次性列表；若业务有上限须在接口说明中写明）。
+- 所有列表类接口均须支持**分页与排序**（含 `limit=0` 的不分页语义）。
+
+## 列表接口 — 应答
+
+列表接口的 JSON 体**固定**为下列结构（字段名与层级保持一致）：
+
+```json
+{
+  "success": true,
+  "code": 0,
+  "message": "",
+  "data": [],
+  "page": 1,
+  "total": 0
+}
+```
+
+- `success`：是否成功（布尔）。
+- `code`：**`0` 表示无错误**；非 `0` 为错误代码（与 `internal/api/errcode` 及业务约定一致）。
+- `message`：错误说明；成功时可为空字符串。
+- `data`：**必须为数组**；无数据时返回 **`[]`**，**严禁**返回 `null`。
+- `page`：当前页码。
+- `total`：符合条件的总条数。
+
+## 单条 / 对象接口 — 应答
+
+非列表、返回单个对象或聚合对象的接口，应答体**固定**为：
+
+```json
+{
+  "success": true,
+  "code": 0,
+  "message": "",
+  "data": {}
+}
+```
+
+- `data` 为对象；**无数据或不存在时可为 `null`**（与列表接口的 `data` 禁止 `null` 区分）。
+
+## 其它约定
+
+- **错误码**：在 `internal/api/errcode.go` 定义常量；**中文文案**只在 `msgZH` / `msgForCode` 映射，handler 中禁止硬编码用户可见错误句。
+- **业务错误映射**：数据库/约束等用 `mapStoreErr`；`Server.sync` 在 **Reload 失败** 时返回 `DNS_ENGINE_RELOAD_FAILED`（UDP 绑定失败在引擎内记录，经实例列表/详情的 **`runtime_error`** 字段返回，不阻塞 sync 成功）。
+- **配置类写操作**：在 `Store` 写库成功后调用 `sync`；`SyncNow` 仅在 **重载配置失败** 时使接口失败；运行时监听错误见各实例的 `runtime_error`。
+- 变更路由或信封字段时同步更新 `web/src/api/client.ts`（解包）、`web/src/api/errors.ts`（码表兜底）与前端调用处。

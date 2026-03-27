@@ -1,0 +1,46 @@
+@import "tailwindcss";
+@config "../tailwind.config.ts";
+
+/*
+ * 样式策略（与 Ant Design Vue）
+ * -----------------------------------------------------------------
+ * - `tailwind.config.ts` 中 `important: true`：工具类声明带 !important，便于压过多数未加权的 .ant-*。
+ * - 布局、侧栏、顶栏、主内容区、表格行内按钮等：已迁到各 .vue 的 class（或 scoped :deep）。
+ * - 本文件仅保留：html/body/#app 根级、以及无法挂到单一业务节点上的全局 Modal 微调（含 Modal.confirm）。
+ */
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  height: 100%;
+  color-scheme: dark;
+  background: #141414;
+}
+
+#app {
+  min-height: 100vh;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #141414;
+}
+
+/* ---------- 全局 Modal（含 Modal.confirm，无 wrap-class-name）---------- */
+#app .ant-modal .ant-modal-header {
+  margin-bottom: 0;
+  padding-bottom: 8px;
+}
+#app .ant-modal .ant-modal-body {
+  padding-top: 8px;
+}
+#app .ant-modal .ant-modal-footer {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 16px !important;
+  padding-bottom: 16px !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+  gap: 12px !important;
+}

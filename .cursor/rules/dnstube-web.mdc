@@ -1,0 +1,44 @@
+---
+description: Vue 管理端（Ant Design Vue + Tailwind）
+globs: 'web/**/*.{vue,ts,css}'
+alwaysApply: false
+---
+
+# Web（Vue 3 + Vite + Ant Design Vue + Tailwind）
+
+- 使用 Composition API + TypeScript；路由为 hash 模式（`#/login`）。
+- API 经 `web/src/api/client.ts`，开发环境 Vite 代理 `/api`。
+- 样式：`style.css` + Tailwind；与 antd 冲突时见 `style.css` 内注释及 `tailwind.config.ts` 的 `important: '#app'`。
+
+## 弹窗（Modal）
+
+- **禁止 Drawer**：不要用侧拉抽屉承载表单或长列表；内容多用 **大号 Modal**（如 `width` 900px 或 `min(920px, 92vw)`），可 `destroy-on-close`。
+- **操作按钮**：确认、取消等统一 **右对齐**，落在 **`.ant-modal-footer`**（用 `<template #footer>`，**不要**再写 `:footer="null"`，否则 `footer` 为 `null` 时插槽不会渲染）。全局样式已对 `.ant-modal-footer` 做右对齐与无下边距；若必须用 `footer=null` 把按钮放在 body 内，再用 `dns-modal-actions`（见 `style.css`）。
+- **标题与内容**：Modal **header 与 body** 之间应有明显间距（全局样式已处理）。
+
+## 表单
+
+- 能加 **placeholder** 的控件尽量加。
+- 表单需 **`a-form` + `:model` + `:rules`**，提交用 **`@finish`** 或校验通过后再请求。
+- 支持 **一键清空** 的控件（`a-input`、`a-select` 等）加 **`allow-clear`**；密码框按需不加。
+
+## 日期时间
+
+- 所有面向用户的 **日期+时间** 展示统一为 **`YYYY-MM-DD HH:mm:ss`**（24 小时制，浏览器本地时区）。使用 `web/src/datetime.ts` 的 `formatDateTime`，勿用 `toLocaleString()` 等随环境变化的格式。
+
+## 表格与列表排序
+
+- **排序交互在表格表头完成**：使用 `a-table` 列上的 `sorter` + 受控 `sortOrder`，在 `@change` 里根据 `sorter` 更新 `sortBy` / `sortOrder` 并请求后端（**不要**在筛选区再放「排序字段」「升序/降序」等 `a-select`）。
+- 服务端分页/排序的列表：列上 `sorter` 的比较函数应对数据顺序 **无影响**（例如恒返回 `0`），避免 antd 在本地再排一次；真实顺序以接口返回为准。
+- **`sortDirections` 与当前升降序对齐**：antd 默认 `['ascend','descend']` 时，若列上当前已是 `descend`，下一次点击会先到「取消排序」而非升序；若当前是 `ascend`，再点会先取消而非降序。可用 **computed**：`sortOrder === 'asc' ? ['ascend','descend'] : ['descend','ascend']`（`sortOrder` 为当前列表的全局排序方向），使升↔降一次点击切换。查询日志默认降序、缓存列表默认升序均适用。
+- 仅对 **后端 `sortBy` 支持的字段** 开放表头排序；无后端字段的列不要加 `sorter`。
+
+## 表格操作列
+
+- 多个行内操作用 **`a-space`** 包裹；每个 **`a-button`** 为 **`type="text"`**、**`size="small"`**、**`:class="dnsTableActionBtn"`**（与 `Instances.vue` 一致：`inline-flex items-center justify-center`）。
+- 按钮子节点为 **图标组件** 与 **`<span>短文案</span>`** 同级（如 `DatabaseOutlined` 与 `<span>记录</span>`）；危险操作用 **`danger`**。勿用带边框的 `default`/`primary` 小按钮堆满操作列。
+
+## 与后端 JSON
+
+- `POST/PATCH` 若后端使用 `DisallowUnknownFields`，**不要**传接口未声明的字段（见实例创建与 `paused`）。
+- **列表类接口**（分页表格等）：请求带 `limit`、`page`、`sortBy`、`sortOrder`；`limit=0` 表示不分页。应答含 `success`、`code`、`message`、`data`（**数组**）、`page`、`total`；列表 `data` 无数据时为 `[]`，不得为 `null`。约定见 `.cursor/rules/dnstube-api.mdc`。

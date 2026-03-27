@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS system_logs;
+DROP TABLE IF EXISTS query_logs;
+DROP TABLE IF EXISTS forward_rules;
+DROP TABLE IF EXISTS dns_records;
+DROP TABLE IF EXISTS dns_instances;
+DROP TABLE IF EXISTS upstream_servers;
+DROP TABLE IF EXISTS system_settings;
+DROP TABLE IF EXISTS upstream_groups;
+DROP TABLE IF EXISTS admin_user;
