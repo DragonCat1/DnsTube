@@ -531,8 +531,10 @@ async function save() {
 
 function remove(row: Inst) {
   Modal.confirm({
-    title: '确认',
-    content: '确定删除？',
+    title: '删除实例',
+    content: `确定删除实例「${row.name} (#${row.id})」吗？关联的静态记录也会一并删除，且不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
     async onOk() {
       await api.deleteInstance(row.id)
       await load()

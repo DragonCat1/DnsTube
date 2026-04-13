@@ -34,11 +34,12 @@
         @change="onFilterChange"
       />
       <a-button type="primary" @click="onFilterChange">应用</a-button>
-      <a-button @click="load">刷新</a-button>
+      <a-button :loading="listLoading" @click="load">刷新</a-button>
     </div>
     <a-table
       :columns="columns"
       :data-source="items"
+      :loading="listLoading"
       :pagination="false"
       bordered
       row-key="rowKey"
@@ -191,6 +192,7 @@ const columns = computed<TableColumnType<CacheRow>[]>(() => {
 
 const instances = ref<{ id: number; name: string }[]>([])
 const items = ref<CacheRow[]>([])
+const listLoading = ref(false)
 const total = ref(0)
 const filterInstance = ref<number>()
 const filterQname = ref('')
@@ -216,26 +218,44 @@ function buildParams(): Record<string, string | number | undefined> {
   return p
 }
 
+let activeLoadSeq = 0
+let filterDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
 async function load() {
-  const d = await api.listCacheEntries(buildParams())
-  const raw = d.items as {
-    instance_id: number
-    qname: string
-    qtype: string
-    ttl_seconds?: number
-    cached_at?: string
-    expires_at: string
-    result_summary?: string
-  }[]
-  items.value = raw.map((r, i) => ({
-    ...r,
-    rowKey: `${r.instance_id}-${i}-${r.qname}-${r.qtype}`,
-  }))
-  total.value = d.total
+  const seq = ++activeLoadSeq
+  listLoading.value = true
+  try {
+    const d = await api.listCacheEntries(buildParams())
+    // 仅采纳最后一次请求结果，避免并发请求造成数据闪回。
+    if (seq !== activeLoadSeq) return
+    const raw = d.items as {
+      instance_id: number
+      qname: string
+      qtype: string
+      ttl_seconds?: number
+      cached_at?: string
+      expires_at: string
+      result_summary?: string
+    }[]
+    items.value = raw.map((r, i) => ({
+      ...r,
+      rowKey: `${r.instance_id}-${i}-${r.qname}-${r.qtype}`,
+    }))
+    total.value = d.total
+  } finally {
+    if (seq === activeLoadSeq) {
+      listLoading.value = false
+    }
+  }
 }
 
 function onFilterChange() {
-  load()
+  if (filterDebounceTimer) {
+    clearTimeout(filterDebounceTimer)
+  }
+  filterDebounceTimer = setTimeout(() => {
+    load()
+  }, 300)
 }
 
 function resolveSorterColumnKey(s: SorterResult<CacheRow>): string {

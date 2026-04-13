@@ -629,11 +629,14 @@ function ruleRowClassName(record: RuleRow) {
 }
 
 function remove(row: Record<string, unknown>) {
+  const rid = Number(row.id)
   Modal.confirm({
-    title: '确认',
-    content: '确定删除？',
+    title: '删除转发规则',
+    content: `确定删除规则 #${rid} 吗？该操作不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
     async onOk() {
-      await api.deleteForwardRule(row.id as number)
+      await api.deleteForwardRule(rid)
       await load()
     },
   })

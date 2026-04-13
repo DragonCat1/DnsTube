@@ -250,9 +250,13 @@ async function delSrv(id: number) {
 }
 
 function delGroup(id: number) {
+  const g = groups.value.find((x) => x.id === id)
+  const groupLabel = g ? `${g.name} (#${g.id})` : `#${id}`
   Modal.confirm({
-    title: '确认',
-    content: '确定删除该转发组？',
+    title: '删除转发组',
+    content: `确定删除转发组「${groupLabel}」吗？组内服务器配置将一并删除，且不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
     async onOk() {
       await api.deleteGroup(id)
       await load()

@@ -70,11 +70,12 @@
       <a-button danger :disabled="!selection.length" @click="bulkDelete"
         >删除所选</a-button
       >
-      <a-button @click="load">刷新</a-button>
+      <a-button :loading="listLoading" @click="load">刷新</a-button>
     </div>
     <a-table
       :columns="logColumns"
       :data-source="items"
+      :loading="listLoading"
       :pagination="false"
       bordered
       row-key="id"
@@ -311,6 +312,7 @@ const filterRcode = ref('')
 const timeRange = ref<[Dayjs, Dayjs] | null>(null)
 
 const items = ref<LogRow[]>([])
+const listLoading = ref(false)
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(50)
@@ -350,15 +352,33 @@ function buildParams(): Record<string, string | number | undefined> {
   return params
 }
 
+let activeLoadSeq = 0
+let filterDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
 async function load() {
-  const d = await api.listQueryLogs(buildParams())
-  items.value = d.items as LogRow[]
-  total.value = d.total
+  const seq = ++activeLoadSeq
+  listLoading.value = true
+  try {
+    const d = await api.listQueryLogs(buildParams())
+    // 仅采纳最后一次请求结果，避免快速筛选导致数据回跳。
+    if (seq !== activeLoadSeq) return
+    items.value = d.items as LogRow[]
+    total.value = d.total
+  } finally {
+    if (seq === activeLoadSeq) {
+      listLoading.value = false
+    }
+  }
 }
 
 function onFilterChange() {
   page.value = 1
-  load()
+  if (filterDebounceTimer) {
+    clearTimeout(filterDebounceTimer)
+  }
+  filterDebounceTimer = setTimeout(() => {
+    load()
+  }, 300)
 }
 
 function resolveSorterColumnKey(s: SorterResult<LogRow>): string {
@@ -394,7 +414,7 @@ function onTableChange(
 function bulkDelete() {
   Modal.confirm({
     title: '确认',
-    content: `删除 ${selection.value.length} 条？`,
+    content: `确定删除已选中的 ${selection.value.length} 条查询日志吗？该操作不可恢复。`,
     async onOk() {
       await api.deleteQueryLogs(selection.value.map((x) => x.id))
       selection.value = []
