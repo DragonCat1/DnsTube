@@ -12,9 +12,7 @@
           i.name
         }}</a-select-option>
       </a-select>
-      <a-button type="primary" :loading="loading" @click="loadAll"
-        >刷新</a-button
-      >
+      <a-button type="primary" :loading="loading" @click="loadAll">刷新</a-button>
     </div>
 
     <!-- 概览卡片：stretch 等高，避免副标题行数不同时高度不齐 -->
@@ -26,21 +24,19 @@
             class="mt-1 text-2xl font-semibold text-[rgba(255,255,255,0.88)] flex items-center gap-2"
           >
             <span aria-hidden="true" class="select-none">🖥️</span>
-            <span>{{ overviewSummary?.instance_total ?? '—' }}</span>
+            <span>{{ overviewSummary?.instance_total ?? "—" }}</span>
           </div>
           <div class="mt-1 text-xs text-[rgba(255,255,255,0.45)]">
-            已暂停 {{ overviewSummary?.instance_paused ?? '—' }}
+            已暂停 {{ overviewSummary?.instance_paused ?? "—" }}
           </div>
         </a-card>
       </a-col>
       <a-col :xs="24" :sm="12" :lg="6" class="flex flex-col">
         <a-card size="small" class="border-[#303030]! bg-[#141414]! flex-1">
           <div class="text-xs text-[rgba(255,255,255,0.45)]">累计查询量</div>
-          <div
-            class="mt-1 text-2xl font-semibold text-[#177ddc] flex items-center gap-2"
-          >
+          <div class="mt-1 text-2xl font-semibold text-[#177ddc] flex items-center gap-2">
             <span aria-hidden="true" class="select-none">🔍</span>
-            <span>{{ overviewSummary?.total_queries_all ?? '—' }}</span>
+            <span>{{ overviewSummary?.total_queries_all ?? "—" }}</span>
           </div>
           <div
             class="mt-1 text-xs text-[rgba(255,255,255,0.45)] truncate"
@@ -64,39 +60,30 @@
             <span aria-hidden="true" class="select-none">🔌</span>
             <span>{{
               overviewSummary == null
-                ? '—'
+                ? "—"
                 : overviewSummary.instances_with_listener_error > 0
                   ? `${overviewSummary.instances_with_listener_error} 处异常`
-                  : '正常'
+                  : "正常"
             }}</span>
           </div>
-          <div class="mt-1 text-xs text-[rgba(255,255,255,0.45)]">
-            进程内绑定状态
-          </div>
+          <div class="mt-1 text-xs text-[rgba(255,255,255,0.45)]">进程内绑定状态</div>
         </a-card>
       </a-col>
       <a-col :xs="24" :sm="12" :lg="6" class="flex flex-col">
         <a-card size="small" class="border-[#303030]! bg-[#141414]! flex-1">
           <div class="text-xs text-[rgba(255,255,255,0.45)]">缓存命中占比</div>
-          <div
-            class="mt-1 text-2xl font-semibold text-[#faad14] flex items-center gap-2"
-          >
+          <div class="mt-1 text-2xl font-semibold text-[#faad14] flex items-center gap-2">
             <span aria-hidden="true" class="select-none">🎯</span>
             <span>{{ cacheHitPercent }}</span>
           </div>
-          <div class="mt-1 text-xs text-[rgba(255,255,255,0.45)]">
-            转发 {{ forwardPercent }}
-          </div>
+          <div class="mt-1 text-xs text-[rgba(255,255,255,0.45)]">转发 {{ forwardPercent }}</div>
         </a-card>
       </a-col>
     </a-row>
 
     <!-- 监听异常明细 -->
     <a-alert
-      v-if="
-        overviewSummary &&
-        Object.keys(overviewSummary.listener_errors || {}).length > 0
-      "
+      v-if="overviewSummary && Object.keys(overviewSummary.listener_errors || {}).length > 0"
       type="error"
       show-icon
       class="border-[#434343]! bg-[#1f1315]!"
@@ -114,10 +101,7 @@
     <!-- 空数据 -->
     <a-empty
       v-if="
-        !summaryLoading &&
-        overviewSummary &&
-        chartsSummary &&
-        chartsSummary.total_queries === 0
+        !summaryLoading && overviewSummary && chartsSummary && chartsSummary.total_queries === 0
       "
       class="rounded border border-dashed border-[#434343] bg-[#141414]/50 py-12"
       :image="Empty.PRESENTED_IMAGE_SIMPLE"
@@ -155,11 +139,7 @@
               class="dns-dashboard-range"
               @change="loadAll"
             >
-              <a-radio-button
-                v-for="r in rangeMeta"
-                :key="r.key"
-                :value="r.key"
-              >
+              <a-radio-button v-for="r in rangeMeta" :key="r.key" :value="r.key">
                 {{ r.label }}
               </a-radio-button>
             </a-radio-group>
@@ -171,45 +151,39 @@
               size="small"
               @press-enter="applyClientIpFilter"
             />
-            <a-button size="small" @click="applyClientIpFilter" class="text-xs"
-              >应用</a-button
-            >
+            <a-button size="small" @click="applyClientIpFilter" class="text-xs">应用</a-button>
           </div>
         </div>
       </template>
       <div class="text-sm text-[rgba(255,255,255,0.45)] mb-4">
-        当前维度：<span class="text-[rgba(255,255,255,0.75)]"
-          >{{ currentRangeLabel }}范围</span
-        >
+        当前维度：<span class="text-[rgba(255,255,255,0.75)]">{{ currentRangeLabel }}范围</span>
         <template v-if="clientIpTrimmed">
-          ；客户端 IP：<span class="text-[rgba(255,255,255,0.75)]">{{
-            clientIpTrimmed
-          }}</span>
+          ；客户端 IP：<span class="text-[rgba(255,255,255,0.75)]">{{ clientIpTrimmed }}</span>
         </template>
         （与下方分布图所选时间范围一致）
       </div>
       <div class="mb-4">
         <div class="text-[rgba(255,255,255,0.65)] mb-2">查询请求数</div>
         <div class="text-3xl font-bold text-[#177ddc]">
-          {{ trendStats?.total ?? '—' }}
+          {{ trendStats?.total ?? "—" }}
         </div>
       </div>
       <a-row :gutter="16">
         <a-col :xs="24" :lg="16">
           <div class="text-sm text-[rgba(255,255,255,0.65)] mb-2">趋势</div>
-          <EchartBox
-            :option="lineOption(trendStats?.series ?? [])"
-            :height="320"
-          />
+          <EchartBox :option="lineOption(trendStats?.series ?? [])" :height="320" />
         </a-col>
         <a-col :xs="24" :lg="8">
+          <div class="text-sm text-[rgba(255,255,255,0.65)] mb-2">客户端排行</div>
+          <EchartBox :option="barOption(trendStats?.topClients ?? [])" :height="320" />
+        </a-col>
+      </a-row>
+      <a-row :gutter="16" class="mt-4">
+        <a-col :span="24">
           <div class="text-sm text-[rgba(255,255,255,0.65)] mb-2">
-            客户端排行
+            DNS 查询总耗时（平均 / 中位数，毫秒）
           </div>
-          <EchartBox
-            :option="barOption(trendStats?.topClients ?? [])"
-            :height="320"
-          />
+          <EchartBox :option="latencyLineOption(trendStats?.latencySeries ?? [])" :height="280" />
         </a-col>
       </a-row>
     </a-card>
@@ -223,10 +197,7 @@
           </a-card>
         </a-col>
         <a-col :xs="24" :lg="12">
-          <a-card
-            title="查询类型 QTYPE"
-            class="border-[#303030]! bg-[#141414]!"
-          >
+          <a-card title="查询类型 QTYPE" class="border-[#303030]! bg-[#141414]!">
             <EchartBox :option="qtypePieOption" :height="280" />
           </a-card>
         </a-col>
@@ -236,10 +207,7 @@
           </a-card>
         </a-col>
         <a-col :xs="24" :lg="12">
-          <a-card
-            title="缓存 / 转发 / 其它"
-            class="border-[#303030]! bg-[#141414]!"
-          >
+          <a-card title="缓存 / 转发 / 其它" class="border-[#303030]! bg-[#141414]!">
             <EchartBox :option="cacheForwardOption" :height="280" />
           </a-card>
         </a-col>
@@ -249,76 +217,84 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { Empty } from 'ant-design-vue'
-import type { EChartsOption } from 'echarts'
-import EchartBox from '../components/EchartBox.vue'
-import * as api from '../api'
-import type { DashboardSummaryDTO } from '../api'
-import { formatDateTime } from '../datetime'
-import { displayFqdn } from '../dnsfmt'
+import { ref, onMounted, computed } from "vue";
+import { Empty } from "ant-design-vue";
+import type { EChartsOption } from "echarts";
+import EchartBox from "../components/EchartBox.vue";
+import * as api from "../api";
+import type { DashboardSummaryDTO } from "../api";
+import { formatDateTime } from "../datetime";
+import { displayFqdn } from "../dnsfmt";
 
-const axisMuted = '#737373'
-const tooltipBg = '#1f1f1f'
+const axisMuted = "#737373";
+const tooltipBg = "#1f1f1f";
 
 const rangeMeta = [
-  { key: 'day' as const, label: '日' },
-  { key: 'week' as const, label: '周' },
-  { key: 'month' as const, label: '月' },
-  { key: 'year' as const, label: '年' },
-]
+  { key: "day" as const, label: "日" },
+  { key: "week" as const, label: "周" },
+  { key: "month" as const, label: "月" },
+  { key: "year" as const, label: "年" },
+];
 
-type RangeKey = (typeof rangeMeta)[number]['key']
+type RangeKey = (typeof rangeMeta)[number]["key"];
 
-interface BlockStats {
-  total: number
-  series: { bucket: string; count: number }[]
-  topClients: { client_ip: string; count: number }[]
+interface LatencySeriesPoint {
+  bucket: string;
+  avg_total_ms: number | null;
+  median_total_ms: number | null;
 }
 
-const instanceId = ref<number | undefined>()
-const instances = ref<{ id: number; name: string }[]>([])
-const loading = ref(false)
+interface BlockStats {
+  total: number;
+  series: { bucket: string; count: number }[];
+  /** 与 series 同一时间桶，仅用于耗时图（平均 / 中位数） */
+  latencySeries: LatencySeriesPoint[];
+  topClients: { client_ip: string; count: number }[];
+}
+
+const instanceId = ref<number | undefined>();
+const instances = ref<{ id: number; name: string }[]>([]);
+const loading = ref(false);
 /** 日/周/月/年 */
-const range = ref<RangeKey>('day')
+const range = ref<RangeKey>("day");
 /** 与请求一致的客户端 IP 筛选（子串匹配，与查询日志一致） */
-const clientIp = ref('')
-const clientIpInput = ref('')
+const clientIp = ref("");
+const clientIpInput = ref("");
 /** 顶部概览卡片：不含 client_ip，不受 IP 筛选影响 */
-const overviewSummary = ref<DashboardSummaryDTO | null>(null)
+const overviewSummary = ref<DashboardSummaryDTO | null>(null);
 /** 趋势与分布图：含 client_ip 筛选（无筛选时与 overview 同源） */
-const chartsSummary = ref<DashboardSummaryDTO | null>(null)
-const summaryLoading = ref(false)
-const trendStats = ref<BlockStats | null>(null)
+const chartsSummary = ref<DashboardSummaryDTO | null>(null);
+const summaryLoading = ref(false);
+const trendStats = ref<BlockStats | null>(null);
 
 const currentRangeLabel = computed(() => {
-  const m = rangeMeta.find((x) => x.key === range.value)
-  return m?.label ?? ''
-})
+  const m = rangeMeta.find((x) => x.key === range.value);
+  return m?.label ?? "";
+});
 
-const clientIpTrimmed = computed(() => clientIp.value.trim())
+const clientIpTrimmed = computed(() => clientIp.value.trim());
 
 /** 累计查询量与「日/周/月/年」无关；仅说明实例筛选范围（不受客户端 IP 筛选影响） */
 const queryTotalScopeHint = computed(() =>
-  instanceId.value != null ? '仅当前所选实例' : '全部实例',
-)
+  instanceId.value != null ? "仅当前所选实例" : "全部实例",
+);
 
 function applyClientIpFilter() {
-  clientIp.value = clientIpInput.value.trim()
-  loadAll()
+  clientIp.value = clientIpInput.value.trim();
+  loadAll();
 }
 
 const cacheHitPercent = computed(() => {
-  const cf = overviewSummary.value?.cache_forward
-  if (!cf || cf.total <= 0) return '—'
-  return `${((cf.cache_hits / cf.total) * 100).toFixed(1)}%`
-})
+  const cf = overviewSummary.value?.cache_forward;
+  if (!cf || cf.total <= 0) return "—";
+  return `${((cf.cache_hits / cf.total) * 100).toFixed(1)}%`;
+});
 
 const forwardPercent = computed(() => {
-  const cf = overviewSummary.value?.cache_forward
-  if (!cf || cf.total <= 0) return '—'
-  return `${((cf.forwarded / cf.total) * 100).toFixed(1)}%`
-})
+  const cf = overviewSummary.value?.cache_forward;
+  if (!cf || cf.total <= 0) return "—";
+  return `${((cf.forwarded / cf.total) * 100).toFixed(1)}%`;
+});
 
 function pieOption(
   title: string,
@@ -326,223 +302,306 @@ function pieOption(
   colors: string[],
 ): EChartsOption {
   return {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     textStyle: { color: axisMuted },
     tooltip: {
-      trigger: 'item',
+      trigger: "item",
       backgroundColor: tooltipBg,
-      borderColor: '#424242',
-      textStyle: { color: '#fff' },
+      borderColor: "#424242",
+      textStyle: { color: "#fff" },
     },
     legend: {
-      type: 'scroll',
+      type: "scroll",
       bottom: 0,
       textStyle: { color: axisMuted },
     },
     series: [
       {
         name: title,
-        type: 'pie',
-        radius: ['42%', '68%'],
+        type: "pie",
+        radius: ["42%", "68%"],
         avoidLabelOverlap: true,
-        itemStyle: { borderColor: '#141414', borderWidth: 1 },
-        label: { color: '#d4d4d4' },
+        itemStyle: { borderColor: "#141414", borderWidth: 1 },
+        label: { color: "#d4d4d4" },
         data: items.map((d, i) => ({
           ...d,
           itemStyle: { color: colors[i % colors.length] },
         })),
       },
     ],
-  }
+  };
 }
 
-const pieColors = [
-  '#177ddc',
-  '#49aa19',
-  '#faad14',
-  '#d4380d',
-  '#722ed1',
-  '#13c2c2',
-  '#eb2f96',
-]
+const pieColors = ["#177ddc", "#49aa19", "#faad14", "#d4380d", "#722ed1", "#13c2c2", "#eb2f96"];
 
 const qtypePieOption = computed<EChartsOption>(() => {
-  const rows = chartsSummary.value?.qtype_distribution ?? []
+  const rows = chartsSummary.value?.qtype_distribution ?? [];
   return pieOption(
-    'QTYPE',
-    rows.map((r) => ({ name: r.qtype || '—', value: Number(r.count) })),
+    "QTYPE",
+    rows.map((r) => ({ name: r.qtype || "—", value: Number(r.count) })),
     pieColors,
-  )
-})
+  );
+});
 
 const rcodePieOption = computed<EChartsOption>(() => {
-  const rows = chartsSummary.value?.rcode_distribution ?? []
+  const rows = chartsSummary.value?.rcode_distribution ?? [];
   return pieOption(
-    'RCODE',
-    rows.map((r) => ({ name: r.response_code || '—', value: Number(r.count) })),
+    "RCODE",
+    rows.map((r) => ({ name: r.response_code || "—", value: Number(r.count) })),
     pieColors,
-  )
-})
+  );
+});
 
 const topQnameOption = computed<EChartsOption>(() => {
-  const rows = [...(chartsSummary.value?.top_qnames ?? [])].reverse()
-  const labels = rows.map((r) => displayFqdn(r.qname))
-  const values = rows.map((r) => Number(r.count))
+  const rows = [...(chartsSummary.value?.top_qnames ?? [])].reverse();
+  const labels = rows.map((r) => displayFqdn(r.qname));
+  const values = rows.map((r) => Number(r.count));
   return {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     textStyle: { color: axisMuted },
     tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
       backgroundColor: tooltipBg,
-      borderColor: '#424242',
-      textStyle: { color: '#fff' },
+      borderColor: "#424242",
+      textStyle: { color: "#fff" },
     },
     grid: { left: 120, right: 24, top: 16, bottom: 16 },
     xAxis: {
-      type: 'value',
+      type: "value",
       axisLabel: { color: axisMuted },
-      splitLine: { lineStyle: { color: '#303030' } },
+      splitLine: { lineStyle: { color: "#303030" } },
     },
     yAxis: {
-      type: 'category',
+      type: "category",
       data: labels,
       axisLabel: { color: axisMuted },
-      axisLine: { lineStyle: { color: '#424242' } },
+      axisLine: { lineStyle: { color: "#424242" } },
     },
     series: [
       {
-        type: 'bar',
+        type: "bar",
         data: values,
-        itemStyle: { color: '#177ddc' },
+        itemStyle: { color: "#177ddc" },
       },
     ],
-  }
-})
+  };
+});
 
 const cacheForwardOption = computed<EChartsOption>(() => {
-  const cf = chartsSummary.value?.cache_forward
+  const cf = chartsSummary.value?.cache_forward;
   const parts = cf
     ? [
-        { name: '缓存命中', value: cf.cache_hits },
-        { name: '转发上游', value: cf.forwarded },
-        { name: '其它', value: cf.other },
+        { name: "缓存命中", value: cf.cache_hits },
+        { name: "转发上游", value: cf.forwarded },
+        { name: "其它", value: cf.other },
       ]
-    : []
-  return pieOption('占比', parts, ['#49aa19', '#177ddc', '#737373'])
-})
+    : [];
+  return pieOption("占比", parts, ["#49aa19", "#177ddc", "#737373"]);
+});
 
-function lineOption(
-  series: { bucket: string; count: number }[],
-): EChartsOption {
+function latencyLineOption(series: LatencySeriesPoint[]): EChartsOption {
+  const fmtMs = (v: unknown) =>
+    v == null || Number.isNaN(Number(v)) ? "—" : `${Number(v).toFixed(1)} ms`;
   return {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     textStyle: { color: axisMuted },
     tooltip: {
-      trigger: 'axis',
+      trigger: "axis",
       backgroundColor: tooltipBg,
-      borderColor: '#424242',
-      textStyle: { color: '#fff' },
+      borderColor: "#424242",
+      textStyle: { color: "#fff" },
+      formatter: (params: unknown) => {
+        const items = Array.isArray(params) ? params : [params];
+        if (!items.length) return "";
+        const axis =
+          typeof (items[0] as { axisValue?: string }).axisValue === "string"
+            ? (items[0] as { axisValue: string }).axisValue
+            : "";
+        let html = axis ? `${axis}<br/>` : "";
+        for (const raw of items) {
+          const p = raw as {
+            marker?: string;
+            seriesName?: string;
+            value?: unknown;
+          };
+          html += `${p.marker ?? ""}${p.seriesName ?? ""}: ${fmtMs(p.value)}<br/>`;
+        }
+        return html;
+      },
+    },
+    legend: {
+      data: ["平均耗时", "中位数耗时"],
+      textStyle: { color: axisMuted },
+      top: 0,
+    },
+    grid: { left: 52, right: 24, top: 36, bottom: 32 },
+    xAxis: {
+      type: "category",
+      data: series.map((s) => s.bucket),
+      axisLabel: { color: axisMuted },
+      axisLine: { lineStyle: { color: "#424242" } },
+    },
+    yAxis: {
+      type: "value",
+      name: "ms",
+      axisLabel: { color: axisMuted },
+      splitLine: { lineStyle: { color: "#303030" } },
+      nameTextStyle: { color: axisMuted, fontSize: 11 },
+    },
+    series: [
+      {
+        name: "平均耗时",
+        type: "line",
+        data: series.map((s) =>
+          s.avg_total_ms != null && Number.isFinite(s.avg_total_ms) ? s.avg_total_ms : null,
+        ),
+        smooth: true,
+        connectNulls: false,
+        itemStyle: { color: "#faad14" },
+        lineStyle: { color: "#faad14" },
+      },
+      {
+        name: "中位数耗时",
+        type: "line",
+        data: series.map((s) =>
+          s.median_total_ms != null && Number.isFinite(s.median_total_ms)
+            ? s.median_total_ms
+            : null,
+        ),
+        smooth: true,
+        connectNulls: false,
+        itemStyle: { color: "#49aa19" },
+        lineStyle: { color: "#49aa19" },
+      },
+    ],
+  };
+}
+
+function lineOption(series: { bucket: string; count: number }[]): EChartsOption {
+  return {
+    backgroundColor: "transparent",
+    textStyle: { color: axisMuted },
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: tooltipBg,
+      borderColor: "#424242",
+      textStyle: { color: "#fff" },
     },
     grid: { left: 48, right: 24, top: 24, bottom: 32 },
     xAxis: {
-      type: 'category',
+      type: "category",
       data: series.map((s) => s.bucket),
       axisLabel: { color: axisMuted },
-      axisLine: { lineStyle: { color: '#424242' } },
+      axisLine: { lineStyle: { color: "#424242" } },
     },
     yAxis: {
-      type: 'value',
+      type: "value",
       axisLabel: { color: axisMuted },
-      splitLine: { lineStyle: { color: '#303030' } },
+      splitLine: { lineStyle: { color: "#303030" } },
     },
     series: [
       {
-        type: 'line',
+        type: "line",
         data: series.map((s) => s.count),
         smooth: true,
-        itemStyle: { color: '#177ddc' },
-        lineStyle: { color: '#177ddc' },
+        itemStyle: { color: "#177ddc" },
+        lineStyle: { color: "#177ddc" },
       },
     ],
-  }
+  };
 }
 
-function barOption(
-  topClients: { client_ip: string; count: number }[],
-): EChartsOption {
+function barOption(topClients: { client_ip: string; count: number }[]): EChartsOption {
   return {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     textStyle: { color: axisMuted },
     tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
       backgroundColor: tooltipBg,
-      borderColor: '#424242',
-      textStyle: { color: '#fff' },
+      borderColor: "#424242",
+      textStyle: { color: "#fff" },
     },
     grid: { left: 100, right: 24, top: 24, bottom: 24 },
     xAxis: {
-      type: 'value',
+      type: "value",
       axisLabel: { color: axisMuted },
-      splitLine: { lineStyle: { color: '#303030' } },
+      splitLine: { lineStyle: { color: "#303030" } },
     },
     yAxis: {
-      type: 'category',
+      type: "category",
       data: topClients.map((t) => t.client_ip).reverse(),
       axisLabel: { color: axisMuted },
-      axisLine: { lineStyle: { color: '#424242' } },
+      axisLine: { lineStyle: { color: "#424242" } },
     },
     series: [
       {
-        type: 'bar',
+        type: "bar",
         data: topClients.map((t) => t.count).reverse(),
-        itemStyle: { color: '#49aa19' },
+        itemStyle: { color: "#49aa19" },
       },
     ],
-  }
+  };
 }
 
 async function loadAll() {
-  loading.value = true
-  summaryLoading.value = true
+  loading.value = true;
+  summaryLoading.value = true;
   try {
-    const cip = clientIpTrimmed.value || undefined
+    const cip = clientIpTrimmed.value || undefined;
     const [overview, trend, chartsFiltered] = await Promise.all([
       api.dashboardSummary(range.value, instanceId.value, 10),
       api.dashboardStats(range.value, instanceId.value, cip),
       cip
         ? api.dashboardSummary(range.value, instanceId.value, 10, cip)
         : Promise.resolve(null as DashboardSummaryDTO | null),
-    ])
-    overviewSummary.value = overview
-    chartsSummary.value = chartsFiltered ?? overview
+    ]);
+    overviewSummary.value = overview;
+    chartsSummary.value = chartsFiltered ?? overview;
     const d = trend as {
-      total_queries: number
-      series: { bucket: string; count: number }[]
-      top_clients: { client_ip: string; count: number }[]
-    }
+      total_queries: number;
+      series: {
+        bucket: string;
+        count: number;
+        avg_total_ms?: number | null;
+        median_total_ms?: number | null;
+      }[];
+      top_clients: { client_ip: string; count: number }[];
+    };
+    const rawSeries = d.series || [];
     trendStats.value = {
       total: d.total_queries,
-      series: (d.series || []).map((s) => ({
+      series: rawSeries.map((s) => ({
         bucket: formatDateTime(s.bucket),
         count: Number(s.count),
       })),
+      latencySeries: rawSeries.map((s) => ({
+        bucket: formatDateTime(s.bucket),
+        avg_total_ms:
+          s.avg_total_ms != null && Number.isFinite(Number(s.avg_total_ms))
+            ? Number(s.avg_total_ms)
+            : null,
+        median_total_ms:
+          s.median_total_ms != null && Number.isFinite(Number(s.median_total_ms))
+            ? Number(s.median_total_ms)
+            : null,
+      })),
       topClients: d.top_clients || [],
-    }
+    };
   } finally {
-    loading.value = false
-    summaryLoading.value = false
+    loading.value = false;
+    summaryLoading.value = false;
   }
 }
 
 onMounted(async () => {
   instances.value = (await api.listInstances()) as {
-    id: number
-    name: string
-  }[]
-  await loadAll()
-})
+    id: number;
+    name: string;
+  }[];
+  await loadAll();
+});
 </script>
 
 <style scoped>

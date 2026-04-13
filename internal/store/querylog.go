@@ -298,6 +298,10 @@ func (s *Store) DeleteQueryLogs(ctx context.Context, ids []int64) (int64, error)
 type DashboardPoint struct {
 	Bucket time.Time `json:"bucket"`
 	Count  int64     `json:"count"`
+	// AvgTotalMs 该时间桶内 total_ms 的平均值（无有效耗时时为 null）。
+	AvgTotalMs *float64 `json:"avg_total_ms,omitempty"`
+	// MedianTotalMs 该时间桶内 total_ms 的中位数（无有效耗时时为 null）。
+	MedianTotalMs *float64 `json:"median_total_ms,omitempty"`
 }
 
 type TopClient struct {
@@ -339,7 +343,9 @@ func (s *Store) DashboardSeries(ctx context.Context, instanceID *int32, from, to
 	}
 	where, args := buildDashboardWhere(instanceID, from, to, clientIP)
 	// 以数据库会话时区进行分桶，避免固定 UTC 导致本地时区展示偏移。
-	q := `SELECT date_trunc('` + trunc + `', created_at) AS b, COUNT(*)::bigint
+	q := `SELECT date_trunc('` + trunc + `', created_at) AS b, COUNT(*)::bigint,
+		AVG(total_ms)::float8,
+		percentile_cont(0.5) WITHIN GROUP (ORDER BY total_ms)
 		FROM query_logs ` + where + ` GROUP BY b ORDER BY b`
 	rows, err := s.Pool.Query(ctx, q, args...)
 	if err != nil {
@@ -349,8 +355,17 @@ func (s *Store) DashboardSeries(ctx context.Context, instanceID *int32, from, to
 	var out []DashboardPoint
 	for rows.Next() {
 		var p DashboardPoint
-		if err := rows.Scan(&p.Bucket, &p.Count); err != nil {
+		var avgMs, medMs sql.NullFloat64
+		if err := rows.Scan(&p.Bucket, &p.Count, &avgMs, &medMs); err != nil {
 			return nil, err
+		}
+		if avgMs.Valid {
+			v := avgMs.Float64
+			p.AvgTotalMs = &v
+		}
+		if medMs.Valid {
+			v := medMs.Float64
+			p.MedianTotalMs = &v
 		}
 		out = append(out, p)
 	}
