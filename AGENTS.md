@@ -45,6 +45,14 @@ make dev-web       # 前端开发服务器
 - 鉴权：`Authorization: Bearer <JWT>`（除 `POST /api/v1/auth/login`）
 - 响应：`success`、`code`（`0` 成功，非 `0` 为 `APICodeNum` 数值）、`message`；**对象**接口 `data` 为对象或 `null`；**列表**接口另含 `page`、`total`，且 `data` 必为数组（见 `.cursor/rules/dnstube-api.mdc`）。字符串错误码仍定义在 `internal/api/errcode.go`，文案由 `msgForCode` 映射。
 
+## Agent 资产文档维护
+
+- **资产范围**：`AGENTS.md`、`web/AGENTS.md`、`.cursor/rules/`、`.cursor/skills/`、`.cursor/agents/` 统一视为 Agent 资产。
+- **变更同步**：涉及流程约定、目录职责、接口规范、环境变量、常用命令或工作流变化时，必须同步更新对应 Agent 资产文档。
+- **单一事实源**：同一规则只保留一个主文档；其他文件通过引用指向，避免重复拷贝导致漂移。
+- **最小必要更新**：仅更新与本次需求直接相关的段落，不做无关重写；文档内容需可执行、可验证，避免空泛描述。
+- **PR 说明要求**：若本次改动影响 Agent 行为，提交说明中需明确“已更新哪些 Agent 资产、为什么更新、如何验证生效”。
+
 ## 禁止
 
 - 在 `internal/dns` 中写 SQL。

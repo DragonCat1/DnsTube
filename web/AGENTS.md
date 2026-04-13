@@ -86,9 +86,9 @@ For GitHub Actions, consider using [`voidzero-dev/setup-vp`](https://github.com/
 - [ ] Run `vp install` after pulling remote changes and before getting started.
 - [ ] Run `vp check` and `vp test` to validate changes.
 
+<!--VITE PLUS END-->
+
 ## DnsTube 前端约定
 
 - **日期时间**：所有面向用户的日期+时间统一为 **`YYYY-MM-DD HH:mm:ss`**（24 小时制，浏览器本地时区）。使用 `src/datetime.ts` 中的 `formatDateTime` 与 `DATE_TIME_FORMAT`，勿用 `toLocaleString()` 等与 locale 强绑定的展示方式。仓库级说明见根目录 [`AGENTS.md`](../AGENTS.md)。
 - **列表排序**：排序在 **`a-table` 表头**（`sorter` / `sortOrder` + `@change`），不在筛选表单里用下拉框选排序字段或升降序。服务端排序时列比较函数勿改变行顺序（见 `.cursor/rules/dnstube-web.mdc`）。**`sortDirections`** 建议随当前 `sortOrder` 在 `['ascend','descend']` 与 `['descend','ascend']` 间切换，避免表头再点时先「取消排序」（见同上规则）。
-
-<!--VITE PLUS END-->
