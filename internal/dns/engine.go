@@ -36,8 +36,9 @@ type Engine struct {
 	queryLogWG       sync.WaitGroup
 	queryLogOverflow atomic.Uint64
 
-	// dnsClient 供上游转发复用，避免每次 Exchange 分配新 Client。
-	dnsClient *mdns.Client
+	// exchangeClient 供上游转发复用：UDP / DoT / DoH 共享一个进程级实例，
+	// 复用 keep-alive、连接池与 mdns.Client，避免每次 Exchange 分配新句柄。
+	exchangeClient *ExchangeClient
 
 	queryTotalTimeout    time.Duration
 	maxConcurrentQueries int
@@ -65,7 +66,7 @@ func NewEngine(st *store.Store, log *slog.Logger, upstreamTimeout, queryTotalTim
 		listeners:            make(map[int32]context.CancelFunc),
 		listenerBind:         make(map[int32]string),
 		listenerErr:          make(map[int32]string),
-		dnsClient:            &mdns.Client{Net: "udp", Timeout: upstreamTimeout},
+		exchangeClient:       NewDefaultExchangeClient(upstreamTimeout),
 		queryTotalTimeout:    queryTotalTimeout,
 		maxConcurrentQueries: maxConcurrentQueries,
 	}

@@ -185,15 +185,15 @@ func (e *Engine) handleQuery(ctx context.Context, inst *instanceSnap, remote net
 		fwdGroupID = &gid
 		servers := inst.groups[rule.targetID]
 		if rule.mode == "parallel" {
-			resp, upAddr, upMs, fwdErr = ParallelForward(e.dnsClient, qctx, servers, reqCopy)
+			resp, upAddr, upMs, fwdErr = ParallelForward(e.exchangeClient, qctx, servers, reqCopy)
 		} else {
-			resp, upAddr, upMs, fwdErr = SequentialForward(e.dnsClient, qctx, servers, reqCopy)
+			resp, upAddr, upMs, fwdErr = SequentialForward(e.exchangeClient, qctx, servers, reqCopy)
 		}
 		forwarded = true
 	} else if inst.instance.DefaultUpstreamGroupID != nil {
 		fwdGroupID = inst.instance.DefaultUpstreamGroupID
 		servers := inst.groups[*inst.instance.DefaultUpstreamGroupID]
-		resp, upAddr, upMs, fwdErr = ParallelForward(e.dnsClient, qctx, servers, reqCopy)
+		resp, upAddr, upMs, fwdErr = ParallelForward(e.exchangeClient, qctx, servers, reqCopy)
 		forwarded = true
 	} else {
 		m := new(mdns.Msg)

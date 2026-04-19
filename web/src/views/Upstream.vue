@@ -68,27 +68,53 @@
           </div>
         </template>
         <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div class="mb-[8px] flex shrink-0 items-stretch gap-2">
-            <a-input
-              v-model:value="srvAddr[g.id]"
-              allow-clear
-              placeholder="IPv4 或 IPv6，如 8.8.8.8 或 2001:db8::1"
-              class="min-w-0 flex-1"
-            />
-            <a-input-number
-              v-model:value="srvPort[g.id]"
-              :min="1"
-              :max="65535"
-              :controls="false"
-              placeholder="端口"
-              class="w-17"
-            />
-            <a-button type="primary" class="shrink-0" @click="addSrv(g.id)">
-              <span class="inline-flex items-center gap-1">
-                <PlusOutlined />
-                <span>添加</span>
-              </span>
-            </a-button>
+          <div class="mb-[8px] flex shrink-0 flex-col gap-2">
+            <div class="flex items-stretch gap-2">
+              <a-select
+                v-model:value="srvProto[g.id]"
+                class="w-[88px] shrink-0"
+                :options="protoOptions"
+                @change="onProtoChange(g.id)"
+              />
+              <a-input
+                v-model:value="srvAddr[g.id]"
+                allow-clear
+                placeholder="IPv4 或 IPv6，如 8.8.8.8 或 2001:db8::1"
+                class="min-w-0 flex-1"
+              />
+              <a-input-number
+                v-model:value="srvPort[g.id]"
+                :min="1"
+                :max="65535"
+                :controls="false"
+                placeholder="端口"
+                class="w-17"
+              />
+              <a-button type="primary" class="shrink-0" @click="addSrv(g.id)">
+                <span class="inline-flex items-center gap-1">
+                  <PlusOutlined />
+                  <span>添加</span>
+                </span>
+              </a-button>
+            </div>
+            <div
+              v-if="srvProto[g.id] && srvProto[g.id] !== 'udp'"
+              class="flex items-stretch gap-2"
+            >
+              <a-input
+                v-if="srvProto[g.id] === 'doh'"
+                v-model:value="srvPath[g.id]"
+                allow-clear
+                placeholder="DoH 路径，缺省 /dns-query"
+                class="min-w-0 flex-1"
+              />
+              <a-input
+                v-model:value="srvSNI[g.id]"
+                allow-clear
+                placeholder="可选 TLS SNI，留空则用地址"
+                class="min-w-0 flex-1"
+              />
+            </div>
           </div>
           <div class="min-h-0 flex-1 overflow-hidden">
             <a-table
@@ -101,7 +127,17 @@
               :scroll="{ x: 'max-content', y: 205 }"
             >
               <template #bodyCell="{ column, record }">
-                <template v-if="column.key === 'action'">
+                <template v-if="column.key === 'protocol'">
+                  <a-tag :color="protocolTagColor((record as ServerRow).protocol)">
+                    {{ protocolLabel((record as ServerRow).protocol || 'udp') }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'address'">
+                  <span class="font-mono text-xs">
+                    {{ formatServerEndpoint(record as ServerRow) }}
+                  </span>
+                </template>
+                <template v-else-if="column.key === 'action'">
                   <a-button
                     type="text"
                     size="small"
@@ -132,24 +168,93 @@ import { message, Modal } from "ant-design-vue";
 import type { TableColumnType } from "ant-design-vue";
 import * as api from "../api";
 import { apiErrorMessage } from "../api/errors";
-import { isUpstreamIpV4OrV6, normalizeUpstreamAddr } from "../upstreamAddr";
+import {
+  defaultPortForProtocol,
+  isUpstreamIpV4OrV6,
+  normalizeDoHPath,
+  normalizeTLSServerName,
+  normalizeUpstreamAddr,
+  protocolLabel,
+  type UpstreamProtocol,
+} from "../upstreamAddr";
 
 interface G {
   id: number;
   name: string;
 }
 
+interface ServerRow {
+  id: number;
+  address: string;
+  port: number;
+  sort_order: number;
+  protocol?: UpstreamProtocol | string;
+  path?: string | null;
+  tls_server_name?: string | null;
+}
+
+const protoOptions = [
+  { label: "UDP", value: "udp" },
+  { label: "DoT", value: "dot" },
+  { label: "DoH", value: "doh" },
+];
+
+function protocolTagColor(p?: string): string {
+  switch (p) {
+    case "dot":
+      return "geekblue";
+    case "doh":
+      return "purple";
+    default:
+      return "default";
+  }
+}
+
+/**
+ * 计算新增上游时使用的 sort_order：
+ *   - 取当前组内已有 sort_order 的最大值 + 1；
+ *   - 空组返回 0。
+ * 不能用 servers.length：删除中间项后会与剩余项重复。
+ */
+function nextSortOrder(rows: ServerRow[] | undefined): number {
+  if (!rows || rows.length === 0) return 0;
+  let max = -1;
+  for (const r of rows) {
+    const v = typeof r.sort_order === "number" ? r.sort_order : 0;
+    if (v > max) max = v;
+  }
+  return max + 1;
+}
+
+function formatServerEndpoint(row: ServerRow): string {
+  const proto = (row.protocol || "udp") as UpstreamProtocol;
+  const hostPort = row.address.includes(":")
+    ? `[${row.address}]:${row.port}`
+    : `${row.address}:${row.port}`;
+  if (proto === "doh") {
+    const path = row.path || "/dns-query";
+    return `https://${hostPort}${path}`;
+  }
+  if (proto === "dot") {
+    return `tls://${hostPort}`;
+  }
+  return `udp://${hostPort}`;
+}
+
 const srvColumns: TableColumnType<Record<string, unknown>>[] = [
-  { title: "地址", dataIndex: "address", key: "address", ellipsis: true },
-  { title: "端口", dataIndex: "port", key: "port", width: 72 },
+  { title: "协议", key: "protocol", width: 72 },
+  { title: "端点", dataIndex: "address", key: "address", ellipsis: true },
   { title: "顺序", dataIndex: "sort_order", key: "sort_order", width: 64 },
   { title: "操作", key: "action", width: 88 },
 ];
 
 const groups = ref<G[]>([]);
-const servers = reactive<Record<number, Record<string, unknown>[]>>({});
+const servers = reactive<Record<number, ServerRow[]>>({});
 const srvAddr = reactive<Record<number, string>>({});
 const srvPort = reactive<Record<number, number>>({});
+const srvProto = reactive<Record<number, UpstreamProtocol>>({});
+const srvPath = reactive<Record<number, string>>({});
+const srvSNI = reactive<Record<number, string>>({});
 const newName = ref("");
 /** 卡片标题内编辑中的组名，与列表同步 */
 const groupNameDraft = reactive<Record<number, string>>({});
@@ -162,12 +267,22 @@ async function load() {
   for (const g of groups.value) {
     groupNameDraft[g.id] = g.name;
     srvAddr[g.id] = "";
-    srvPort[g.id] = 53;
-    const srvRaw = (await api.listGroupServers(g.id)) as
-      | Record<string, unknown>[]
-      | null
-      | undefined;
+    if (!srvProto[g.id]) srvProto[g.id] = "udp";
+    srvPort[g.id] = defaultPortForProtocol(srvProto[g.id]);
+    if (srvPath[g.id] === undefined) srvPath[g.id] = "";
+    if (srvSNI[g.id] === undefined) srvSNI[g.id] = "";
+    const srvRaw = (await api.listGroupServers(g.id)) as ServerRow[] | null | undefined;
     servers[g.id] = Array.isArray(srvRaw) ? srvRaw : [];
+  }
+}
+
+/** 切换协议时重置端口为协议默认值（仅当当前是另一协议默认端口时才覆盖，避免吞用户手填值）。 */
+function onProtoChange(gid: number) {
+  const proto = srvProto[gid];
+  const cur = srvPort[gid];
+  const isLikelyDefault = cur === 53 || cur === 853 || cur === 443;
+  if (isLikelyDefault) {
+    srvPort[gid] = defaultPortForProtocol(proto);
   }
 }
 
@@ -230,15 +345,39 @@ async function addSrv(gid: number) {
     message.warning("地址须为合法 IPv4 或 IPv6");
     return;
   }
+  const proto = (srvProto[gid] || "udp") as UpstreamProtocol;
   const addr = normalizeUpstreamAddr(raw)!;
+
+  const body: Parameters<typeof api.addServer>[1] = {
+    address: addr,
+    port: srvPort[gid] || defaultPortForProtocol(proto),
+    sort_order: nextSortOrder(servers[gid]),
+    protocol: proto,
+  };
+
+  if (proto === "doh") {
+    const path = normalizeDoHPath(srvPath[gid] || "");
+    if (path === null) {
+      message.warning("DoH 路径须以 / 开头且不含查询/片段");
+      return;
+    }
+    body.path = path;
+  }
+  if (proto !== "udp") {
+    const sni = normalizeTLSServerName(srvSNI[gid] || "");
+    if (sni === null) {
+      message.warning("TLS SNI 不合法");
+      return;
+    }
+    if (sni) body.tls_server_name = sni;
+  }
+
   try {
-    await api.addServer(gid, {
-      address: addr,
-      port: srvPort[gid] || 53,
-      sort_order: servers[gid]?.length || 0,
-    });
+    await api.addServer(gid, body);
     srvAddr[gid] = "";
-    servers[gid] = (await api.listGroupServers(gid)) as Record<string, unknown>[];
+    srvPath[gid] = "";
+    srvSNI[gid] = "";
+    servers[gid] = (await api.listGroupServers(gid)) as ServerRow[];
   } catch (e: unknown) {
     message.error(apiErrorMessage(e, "添加失败"));
   }

@@ -10,3 +10,4 @@ description: Work on DnsTube admin REST API, JWT, or JSON DTOs. Use when changin
 - 写库后配置落地：`sync` → `Engine.SyncNow`；绑定失败返回 `DNS_UDP_BIND_FAILED`。
 - 鉴权：`internal/api/middleware.go` 与 `internal/auth/jwt.go`。
 - 变更路由时同步更新 `web/src/api/index.ts`、`client.ts`、相关页面。
+- 上游服务器 DTO 字段：`address`（IPv4/IPv6 字面量）、`port`、`sort_order`、`protocol`（`udp`/`dot`/`doh`，缺省 `udp`）、`path`（DoH 路径，缺省 `/dns-query`）、`tls_server_name`（DoT/DoH 可选 SNI）。校验函数集中在 `internal/api/upstream_addr.go`。

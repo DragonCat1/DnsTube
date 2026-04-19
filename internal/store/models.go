@@ -42,12 +42,18 @@ type UpstreamGroup struct {
 }
 
 type UpstreamServer struct {
-	ID        int32     `json:"id"`
-	GroupID   int32     `json:"group_id"`
-	Address   string    `json:"address"`
-	Port      int       `json:"port"`
-	SortOrder int       `json:"sort_order"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        int32  `json:"id"`
+	GroupID   int32  `json:"group_id"`
+	Address   string `json:"address"`
+	Port      int    `json:"port"`
+	SortOrder int    `json:"sort_order"`
+	// Protocol 上游传输协议：udp / dot / doh。空值由 store 层归一为 "udp"。
+	Protocol string `json:"protocol"`
+	// Path DoH 端点路径，如 "/dns-query"；非 DoH 时为 nil。
+	Path *string `json:"path,omitempty"`
+	// TLSServerName DoT/DoH TLS 握手与证书校验的 SNI；为空表示沿用 Address。
+	TLSServerName *string   `json:"tls_server_name,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type ForwardRule struct {

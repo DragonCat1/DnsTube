@@ -27,6 +27,9 @@ const (
 	CodeDNSReloadFailed         = "DNS_ENGINE_RELOAD_FAILED"
 	CodeDNSBindFailed          = "DNS_UDP_BIND_FAILED"
 	CodeTelegramSendFailed     = "TELEGRAM_SEND_FAILED"
+	CodeUpstreamProtocolInvalid = "UPSTREAM_PROTOCOL_INVALID"
+	CodeUpstreamDoHPathInvalid  = "UPSTREAM_DOH_PATH_INVALID"
+	CodeUpstreamSNIInvalid      = "UPSTREAM_SNI_INVALID"
 )
 
 var msgZH = map[string]string{
@@ -53,7 +56,10 @@ var msgZH = map[string]string{
 	CodeDNSRecordIPv6Invalid:   "AAAA 记录正文须为合法 IPv6 地址",
 	CodeDNSReloadFailed:        "DNS 引擎重载配置失败",
 	CodeDNSBindFailed:          "UDP 监听地址绑定失败（端口可能被占用）",
-	CodeTelegramSendFailed:     "Telegram 发送失败（请检查 Token、Chat ID、是否启用通知与网络）",
+	CodeTelegramSendFailed:      "Telegram 发送失败（请检查 Token、Chat ID、是否启用通知与网络）",
+	CodeUpstreamProtocolInvalid: "上游协议须为 udp、dot 或 doh",
+	CodeUpstreamDoHPathInvalid:  "DoH 路径须以 / 开头且不含查询/片段",
+	CodeUpstreamSNIInvalid:      "TLS SNI 须为合法主机名",
 }
 
 func msgForCode(code string) string {
@@ -97,4 +103,7 @@ var apiCodeNumByString = map[string]int{
 	CodeTelegramSendFailed:    1020,
 	CodeDNSRecordIPv4Invalid:  1021,
 	CodeDNSRecordIPv6Invalid:  1022,
+	CodeUpstreamProtocolInvalid: 1025,
+	CodeUpstreamDoHPathInvalid:  1026,
+	CodeUpstreamSNIInvalid:      1027,
 }

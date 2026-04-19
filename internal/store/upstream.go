@@ -59,7 +59,7 @@ func (s *Store) DeleteUpstreamGroup(ctx context.Context, id int32) error {
 
 func (s *Store) ListUpstreamServers(ctx context.Context, groupID int32) ([]UpstreamServer, error) {
 	rows, err := s.Pool.Query(ctx, `
-		SELECT id, group_id, address, port, sort_order, created_at
+		SELECT id, group_id, address, port, sort_order, protocol, path, tls_server_name, created_at
 		FROM upstream_servers WHERE group_id = $1 ORDER BY sort_order, id`, groupID)
 	if err != nil {
 		return nil, err
@@ -68,8 +68,11 @@ func (s *Store) ListUpstreamServers(ctx context.Context, groupID int32) ([]Upstr
 	var out []UpstreamServer
 	for rows.Next() {
 		var u UpstreamServer
-		if err := rows.Scan(&u.ID, &u.GroupID, &u.Address, &u.Port, &u.SortOrder, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.GroupID, &u.Address, &u.Port, &u.SortOrder, &u.Protocol, &u.Path, &u.TLSServerName, &u.CreatedAt); err != nil {
 			return nil, err
+		}
+		if u.Protocol == "" {
+			u.Protocol = "udp"
 		}
 		out = append(out, u)
 	}
@@ -82,11 +85,27 @@ func (s *Store) ListUpstreamServers(ctx context.Context, groupID int32) ([]Upstr
 	return out, nil
 }
 
-func (s *Store) AddUpstreamServer(ctx context.Context, groupID int32, address string, port, sortOrder int) (int32, error) {
+// AddUpstreamServerInput 创建上游服务器的入参；新协议字段集中在此，便于 API 与存储解耦。
+type AddUpstreamServerInput struct {
+	GroupID       int32
+	Address       string
+	Port          int
+	SortOrder     int
+	Protocol      string  // udp / dot / doh；空值视为 udp
+	Path          *string // 仅 DoH 使用
+	TLSServerName *string // DoT/DoH 可选
+}
+
+func (s *Store) AddUpstreamServer(ctx context.Context, in AddUpstreamServerInput) (int32, error) {
+	proto := in.Protocol
+	if proto == "" {
+		proto = "udp"
+	}
 	var id int32
 	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO upstream_servers (group_id, address, port, sort_order) VALUES ($1, $2, $3, $4) RETURNING id`,
-		groupID, address, port, sortOrder,
+		INSERT INTO upstream_servers (group_id, address, port, sort_order, protocol, path, tls_server_name)
+		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+		in.GroupID, in.Address, in.Port, in.SortOrder, proto, in.Path, in.TLSServerName,
 	).Scan(&id)
 	return id, err
 }

@@ -111,7 +111,14 @@ export async function deleteGroup(id: number) {
 
 export async function addServer(
   groupId: number,
-  body: { address: string; port: number; sort_order: number },
+  body: {
+    address: string
+    port: number
+    sort_order: number
+    protocol?: 'udp' | 'dot' | 'doh'
+    path?: string | null
+    tls_server_name?: string | null
+  },
 ) {
   await client.post(`/api/v1/upstream-groups/${groupId}/servers`, body)
 }

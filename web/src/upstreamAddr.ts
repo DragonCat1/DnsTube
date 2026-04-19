@@ -42,3 +42,64 @@ function isIPv4DottedDecimal(s: string): boolean {
 export function isUpstreamIpV4OrV6(input: string): boolean {
   return normalizeUpstreamAddr(input) !== null;
 }
+
+/** 上游协议字面量；与后端 internal/api/upstream_addr.go 常量保持同步。 */
+export type UpstreamProtocol = "udp" | "dot" | "doh";
+
+/** 协议对应的常用默认端口。 */
+export function defaultPortForProtocol(p: UpstreamProtocol): number {
+  switch (p) {
+    case "dot":
+      return 853;
+    case "doh":
+      return 443;
+    default:
+      return 53;
+  }
+}
+
+/** 协议对应的中文展示名（表单与列表共用）。 */
+export function protocolLabel(p: UpstreamProtocol | string): string {
+  switch (p) {
+    case "dot":
+      return "DoT";
+    case "doh":
+      return "DoH";
+    case "udp":
+    default:
+      return "UDP";
+  }
+}
+
+/**
+ * 归一 DoH 端点路径：
+ * - 空 / "/" 视为缺省 "/dns-query"。
+ * - 必须以 "/" 开头，且不含查询字符串或片段。
+ * - 不合法返回 null。
+ */
+export function normalizeDoHPath(input: string): string | null {
+  const t = input.trim();
+  if (!t || t === "/") return "/dns-query";
+  if (!t.startsWith("/")) return null;
+  if (t.includes("?") || t.includes("#")) return null;
+  return t;
+}
+
+/**
+ * 归一 TLS SNI（可选）：空字符串视为不填，返回 ""；不合法返回 null。
+ * 校验规则：1-253 字符；每段 1-63 字符；字母/数字/连字符；连字符不在首尾。
+ * 也允许 IP 字面量直接做 SNI（与后端一致）。
+ */
+export function normalizeTLSServerName(input: string): string | null {
+  const t = input.trim();
+  if (!t) return "";
+  if (t.length > 253) return null;
+  if (isUpstreamIpV4OrV6(t)) return normalizeUpstreamAddr(t);
+  const labels = t.replace(/\.$/, "").split(".");
+  for (const label of labels) {
+    if (!label || label.length > 63) return null;
+    if (label.startsWith("-") || label.endsWith("-")) return null;
+    if (!/^[A-Za-z0-9-]+$/.test(label)) return null;
+  }
+  return t;
+}

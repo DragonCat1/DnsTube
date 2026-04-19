@@ -327,6 +327,8 @@ const recFormRules: Record<string, Rule[]> = {
 interface UpstreamServerRow {
   address: string
   port: number
+  protocol?: 'udp' | 'dot' | 'doh' | string
+  path?: string | null
 }
 
 interface DefaultUpstream {
@@ -359,7 +361,21 @@ const instColumns: TableColumnType<Inst>[] = [
 
 function formatServerList(servers: UpstreamServerRow[]) {
   if (!servers?.length) return '（无服务器）'
-  return servers.map((s) => `${s.address}:${s.port}`).join('，')
+  return servers
+    .map((s) => {
+      const hostPort = s.address.includes(':')
+        ? `[${s.address}]:${s.port}`
+        : `${s.address}:${s.port}`
+      switch (s.protocol) {
+        case 'doh':
+          return `https://${hostPort}${s.path || '/dns-query'}`
+        case 'dot':
+          return `tls://${hostPort}`
+        default:
+          return hostPort
+      }
+    })
+    .join('，')
 }
 
 function instanceRowClassName(record: Inst) {

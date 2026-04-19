@@ -137,6 +137,12 @@ func sortUpstreamServersSlice(servers []store.UpstreamServer, sortBy, order stri
 			} else {
 				less = a.ID < b.ID
 			}
+		case "protocol":
+			if c := strings.Compare(a.Protocol, b.Protocol); c != 0 {
+				less = c < 0
+			} else {
+				less = a.ID < b.ID
+			}
 		case "created_at":
 			if !a.CreatedAt.Equal(b.CreatedAt) {
 				less = a.CreatedAt.Before(b.CreatedAt)

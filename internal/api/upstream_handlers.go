@@ -116,9 +116,12 @@ func (s *Server) deleteGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 type serverReq struct {
-	Address   string `json:"address"`
-	Port      int    `json:"port"`
-	SortOrder int    `json:"sort_order"`
+	Address       string  `json:"address"`
+	Port          int     `json:"port"`
+	SortOrder     int     `json:"sort_order"`
+	Protocol      string  `json:"protocol"`
+	Path          *string `json:"path,omitempty"`
+	TLSServerName *string `json:"tls_server_name,omitempty"`
 }
 
 func (s *Server) addServer(w http.ResponseWriter, r *http.Request) {
@@ -136,15 +139,55 @@ func (s *Server) addServer(w http.ResponseWriter, r *http.Request) {
 		writeObjErr(w, http.StatusBadRequest, CodeServerAddressRequired)
 		return
 	}
+	proto, ok := NormalizeUpstreamProtocol(req.Protocol)
+	if !ok {
+		writeObjErr(w, http.StatusBadRequest, CodeUpstreamProtocolInvalid)
+		return
+	}
 	addr, ok := NormalizeUpstreamAddr(req.Address)
 	if !ok {
 		writeObjErr(w, http.StatusBadRequest, CodeUpstreamServerIPInvalid)
 		return
 	}
 	if req.Port <= 0 {
-		req.Port = 53
+		req.Port = DefaultPortForProtocol(proto)
 	}
-	id, err := s.Store.AddUpstreamServer(r.Context(), gid, addr, req.Port, req.SortOrder)
+
+	in := store.AddUpstreamServerInput{
+		GroupID:   gid,
+		Address:   addr,
+		Port:      req.Port,
+		SortOrder: req.SortOrder,
+		Protocol:  proto,
+	}
+
+	// DoH：必须提供合法 path（缺省 /dns-query）。
+	if proto == UpstreamProtocolDoH {
+		raw := ""
+		if req.Path != nil {
+			raw = *req.Path
+		}
+		path, ok := NormalizeDoHPath(raw)
+		if !ok {
+			writeObjErr(w, http.StatusBadRequest, CodeUpstreamDoHPathInvalid)
+			return
+		}
+		in.Path = &path
+	}
+
+	// DoT/DoH 的 SNI 可选；提供时必须合法。
+	if proto != UpstreamProtocolUDP && req.TLSServerName != nil {
+		sni, ok := NormalizeTLSServerName(*req.TLSServerName)
+		if !ok {
+			writeObjErr(w, http.StatusBadRequest, CodeUpstreamSNIInvalid)
+			return
+		}
+		if sni != "" {
+			in.TLSServerName = &sni
+		}
+	}
+
+	id, err := s.Store.AddUpstreamServer(r.Context(), in)
 	if err != nil {
 		writeObjErr(w, http.StatusInternalServerError, mapStoreErr(err))
 		return
