@@ -219,7 +219,10 @@ func (e *Engine) handleQuery(ctx context.Context, inst *instanceSnap, remote net
 	}
 
 	resp.Id = req.Id
-	e.cache.set(key, resp, minTTL(resp))
+	// 上游明确返回 SERVFAIL 时不写缓存，避免将瞬时上游异常放大到后续请求。
+	if resp.Rcode != mdns.RcodeServerFailure {
+		e.cache.set(key, resp, minTTL(resp))
+	}
 	upPtr := upAddr
 	ums := upMs
 	e.logQuery(qctx, inst.instance.ID, clientIP, qname, qtypeString(q.Qtype), mdns.RcodeToString[resp.Rcode], false, forwarded, &upPtr, &ums, int(time.Since(start).Milliseconds()), nil, resp, fwdGroupID)
