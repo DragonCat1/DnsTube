@@ -48,6 +48,9 @@ type Engine struct {
 	// ruleCompile 按 ruleID 缓存编译结果，Reload 时按内容指纹复用。
 	ruleCompileMu sync.Mutex
 	ruleCompile   map[int32]ruleCompileCache
+
+	// reloadMu 串行整个 Reload（读库 + 换 snap），避免并发 Reload 旧结果后写覆盖新配置。
+	reloadMu sync.Mutex
 }
 
 func NewEngine(st *store.Store, log *slog.Logger, upstreamTimeout, queryTotalTimeout time.Duration, maxConcurrentQueries int) *Engine {
@@ -79,6 +82,9 @@ func NewEngine(st *store.Store, log *slog.Logger, upstreamTimeout, queryTotalTim
 }
 
 func (e *Engine) Reload(ctx context.Context) error {
+	e.reloadMu.Lock()
+	defer e.reloadMu.Unlock()
+
 	instances, err := e.store.ListInstances(ctx)
 	if err != nil {
 		return err
@@ -388,7 +394,7 @@ func (e *Engine) syncListeners(ctx context.Context) error {
 				}
 				prevMsg := e.listenerErr[id]
 				e.listenerErr[id] = msg
-				// 绑定错误未变时不再刷 Error，避免重复日志
+				// 绑定错误未变时不再刷 Error（下次 SyncNow / 启动再试时若仍失败则静默）
 				if prevMsg != msg {
 					e.log.Error("udp listen", "bind", bind, "instance_id", id, "err", err)
 				}

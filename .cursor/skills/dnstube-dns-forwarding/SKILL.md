@@ -28,10 +28,13 @@ description: Implements or debugs DNS forwarding, caching, and forward rules in 
 - **无周期全量轮询**：引擎不以固定间隔从 DB Reload。
 - **触发点**：进程启动；DNS 相关管理 API 写成功后的 `SyncNow`；URL 规则拉取写库后的 `Reload`/`SyncNow`。
 - **不 SyncNow**：管理员改名/改密、上游组仅创建或改名（不影响解析 snap）；上游组删除仍 SyncNow。
+- **Reload 串行**：`Engine.Reload` 全程 `reloadMu`，避免 API SyncNow 与定时 URL 拉取等并发 Reload 旧结果覆盖新 snap。
 - **编译复用**：Reload 按规则内容指纹复用已编译 regexp/domain；指纹不含 `pattern_fetched_at`（URL 拉取正文未变时不重编译）。
+- **UDP 绑定失败**：记入实例 `runtime_error`；**无进程内定时重试**，需下次 `SyncNow`（管理端再改 DNS 相关配置）或进程重启后再绑。
 - **系统日志**：URL 拉取成功记 `forward rule pattern fetch success`（含 old_count/new_count/delta/content_changed/source）；`syncListeners` 成功记 `dns listeners synced`（含 changed/wanted/running/started/stopped）。
 
 ## 调试
 
 - 确认实例未 `paused`，监听地址/端口与防火墙一致。
 - 管理 API 变更后引擎 `SyncNow` 会同步 UDP 监听。
+- 启动后实例长期 `runtime_error`（端口占用等）：排除占用后通过任意 DNS 相关配置写入触发 SyncNow，或重启进程。
