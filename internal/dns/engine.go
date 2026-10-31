@@ -81,6 +81,19 @@ func NewEngine(st *store.Store, log *slog.Logger, upstreamTimeout, queryTotalTim
 	}
 }
 
+// keepCompileFromSnap 将旧 snap 中的规则 ID 记入 keep，避免 prune 掉仍在用的编译缓存。
+func keepCompileFromSnap(snap *instanceSnap, keep map[int32]struct{}) {
+	if snap == nil {
+		return
+	}
+	for _, r := range snap.rules {
+		keep[r.ruleID] = struct{}{}
+	}
+	for _, r := range snap.domainMap {
+		keep[r.ruleID] = struct{}{}
+	}
+}
+
 func (e *Engine) Reload(ctx context.Context) error {
 	e.reloadMu.Lock()
 	defer e.reloadMu.Unlock()
@@ -89,12 +102,24 @@ func (e *Engine) Reload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	e.mu.RLock()
+	oldSnaps := e.snaps
+	e.mu.RUnlock()
+
 	next := make(map[int32]*instanceSnap)
 	keepCompile := make(map[int32]struct{})
+	var loadErrs []error
 	for _, inst := range instances {
-		snap, err := e.loadInstance(ctx, inst, keepCompile)
-		if err != nil {
-			e.log.Error("load instance", "id", inst.ID, "err", err)
+		snap, loadErr := e.loadInstance(ctx, inst, keepCompile)
+		if loadErr != nil {
+			e.log.Error("load instance", "id", inst.ID, "err", loadErr)
+			loadErrs = append(loadErrs, fmt.Errorf("instance %d: %w", inst.ID, loadErr))
+			// 瞬时读库失败时沿用旧 snap，避免该实例从内存消失并被 syncListeners 拆掉监听。
+			if old := oldSnaps[inst.ID]; old != nil {
+				next[inst.ID] = old
+				keepCompileFromSnap(old, keepCompile)
+			}
 			continue
 		}
 		next[inst.ID] = snap
@@ -103,6 +128,9 @@ func (e *Engine) Reload(ctx context.Context) error {
 	e.mu.Lock()
 	e.snaps = next
 	e.mu.Unlock()
+	if len(loadErrs) > 0 {
+		return errors.Join(loadErrs...)
+	}
 	return nil
 }
 
@@ -487,15 +515,19 @@ func (e *Engine) serveUDPLoop(ctx context.Context, pc net.PacketConn, instID int
 }
 
 // SyncNow reloads DB and UDP listeners (call after API mutations).
+// Reload 若部分实例加载失败会返回 error，但仍先完成 snap 替换（失败实例保留旧 snap）；
+// 此处仍调用 syncListeners，使成功加载的实例监听变更生效，再把 Reload 错误返回给 API。
 func (e *Engine) SyncNow(ctx context.Context) error {
-	if err := e.Reload(ctx); err != nil {
-		return err
-	}
+	reloadErr := e.Reload(ctx)
 	rc := e.rootCtx
 	if rc == nil {
 		rc = context.Background()
 	}
-	return e.syncListeners(rc)
+	syncErr := e.syncListeners(rc)
+	if reloadErr != nil {
+		return reloadErr
+	}
+	return syncErr
 }
 
 // ListenerErrors 返回当前 UDP 绑定失败的实例及错误信息（如端口占用）；无错误时可能返回 nil。
