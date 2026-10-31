@@ -109,8 +109,6 @@ func (s *Server) patchProfile(w http.ResponseWriter, r *http.Request) {
 		}
 		s.insertAuditLog(r, "info", "password_change", name, "密码已修改", nil)
 	}
-	if !s.sync(w, r) {
-		return
-	}
+	// 管理员资料不影响 DNS 引擎 snap，不触发 SyncNow
 	writeObjOK(w, http.StatusOK, map[string]string{"status": "ok"})
 }

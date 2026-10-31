@@ -63,9 +63,7 @@ func (s *Server) createGroup(w http.ResponseWriter, r *http.Request) {
 		writeObjErr(w, http.StatusInternalServerError, mapStoreErr(err))
 		return
 	}
-	if !s.sync(w, r) {
-		return
-	}
+	// 仅创建组名不改变引擎 snap（按 group id / servers 加载），不触发 SyncNow
 	writeObjOK(w, http.StatusCreated, map[string]int32{"id": id})
 }
 
@@ -93,9 +91,7 @@ func (s *Server) patchGroup(w http.ResponseWriter, r *http.Request) {
 		writeObjErr(w, http.StatusInternalServerError, mapStoreErr(err))
 		return
 	}
-	if !s.sync(w, r) {
-		return
-	}
+	// 组改名不影响解析 snap，不触发 SyncNow
 	writeObjOK(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 

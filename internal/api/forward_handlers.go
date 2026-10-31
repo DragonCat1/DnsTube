@@ -156,7 +156,14 @@ func (s *Server) syncForwardRulePatternAfterConfigChange(ctx context.Context, id
 			}
 			return
 		}
-		_ = s.Store.UpdateForwardRulePatternFetch(ctx, id, body, count, at, enc)
+		changed := dnspkg.PatternFetchContentChanged(full, body, enc)
+		if err := s.Store.UpdateForwardRulePatternFetch(ctx, id, body, count, at, enc); err != nil {
+			if s.Log != nil {
+				s.Log.Warn("update forward rule pattern fetch", "id", id, "err", err)
+			}
+			return
+		}
+		dnspkg.LogPatternFetchSuccess(s.Log, id, full.PatternRuleCount, count, changed, dnspkg.PatternFetchSourceSave)
 		return
 	}
 	n, enc, err := dnspkg.CompileForwardRuleForSave(full)
@@ -314,10 +321,12 @@ func (s *Server) refreshRulePattern(w http.ResponseWriter, r *http.Request) {
 	}
 	enc, _ := dnspkg.EncodedResolvedEntries(lines)
 	at := time.Now().UTC()
+	changed := dnspkg.PatternFetchContentChanged(rule, body, enc)
 	if err := s.Store.UpdateForwardRulePatternFetch(r.Context(), id, body, count, at, enc); err != nil {
 		writeObjErr(w, http.StatusInternalServerError, mapStoreErr(err))
 		return
 	}
+	dnspkg.LogPatternFetchSuccess(s.Log, id, rule.PatternRuleCount, count, changed, dnspkg.PatternFetchSourceManual)
 	if !s.sync(w, r) {
 		return
 	}
