@@ -22,7 +22,7 @@ func (s *Store) ListForwardRulesSummary(ctx context.Context, instanceID int32) (
 	return scanForwardRuleRows(rows, false)
 }
 
-// ListForwardRules 供 DNS 引擎加载，含 pattern_fetched_body。
+// ListForwardRules 供通用加载，含 pattern_fetched_body 与 hit_count。
 func (s *Store) ListForwardRules(ctx context.Context, instanceID int32) ([]ForwardRule, error) {
 	rows, err := s.Pool.Query(ctx, `
 		SELECT id, instance_id, name_pattern, pattern_source, pattern_url, pattern_format,
@@ -34,6 +34,53 @@ func (s *Store) ListForwardRules(ctx context.Context, instanceID int32) ([]Forwa
 	}
 	defer rows.Close()
 	return scanForwardRuleRows(rows, true)
+}
+
+// ListForwardRulesForEngine 供 DNS 引擎 Reload：含编译所需正文与 resolved_entries，不选 hit_count。
+func (s *Store) ListForwardRulesForEngine(ctx context.Context, instanceID int32) ([]ForwardRule, error) {
+	rows, err := s.Pool.Query(ctx, `
+		SELECT id, instance_id, name_pattern, pattern_source, pattern_url, pattern_format,
+		       target_group_id, mode, priority, disabled, created_at,
+		       pattern_fetched_body, pattern_rule_count, pattern_fetched_at,
+		       pattern_resolved_entries::text
+		FROM forward_rules WHERE instance_id = $1 ORDER BY priority, id`, instanceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ForwardRule
+	for rows.Next() {
+		var r ForwardRule
+		var url sql.NullString
+		var fetchedAt sql.NullTime
+		var body sql.NullString
+		var resolved sql.NullString
+		err := rows.Scan(
+			&r.ID, &r.InstanceID, &r.NamePattern, &r.PatternSource, &url, &r.PatternFormat,
+			&r.TargetGroupID, &r.Mode, &r.Priority, &r.Disabled, &r.CreatedAt,
+			&body, &r.PatternRuleCount, &fetchedAt, &resolved,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if url.Valid {
+			s := url.String
+			r.PatternURL = &s
+		}
+		if fetchedAt.Valid {
+			t := fetchedAt.Time
+			r.PatternFetchedAt = &t
+		}
+		if body.Valid {
+			s := body.String
+			r.PatternFetchedBody = &s
+		}
+		if resolved.Valid && resolved.String != "" {
+			r.PatternResolvedEntries = []byte(resolved.String)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 
 func scanForwardRuleRows(rows pgx.Rows, withBody bool) ([]ForwardRule, error) {

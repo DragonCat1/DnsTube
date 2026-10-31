@@ -4,7 +4,7 @@
 
 - **单进程**：`cmd/dnstube` 同时启动 **UDP DNS**（每实例一监听）与 **HTTP 管理 API**。
 - **分层**：`internal/dns`（解析、缓存、转发）→ 不直接写 SQL；`internal/store`（PostgreSQL）；`internal/api`（REST、DTO）；`internal/auth`（JWT、密码）。
-- **配置**：运行时以 **PostgreSQL** 为准；无配置文件热重载。
+- **配置**：运行时以 **PostgreSQL** 为准；无配置文件热重载。DNS 引擎配置热更新仅经 **启动 / DNS 相关 API 的 SyncNow / URL 规则拉取后 Reload**，**无周期全量轮询**；`Reload` 串行；规则编译按内容指纹复用（不含 `pattern_fetched_at`）。详见 `.cursor/skills/dnstube-dns-forwarding`。
 
 ## 目录索引
 
@@ -28,6 +28,7 @@
 - **上游协议**：每条上游服务器可选 **UDP / DoT / DoH**；地址只接受 IP 字面量（IPv4/IPv6），DoH 端点路径与可选 SNI 在表单中按需显示，详见 `.cursor/skills/dnstube-dns-forwarding`。
 - **首启管理员**：无账号时创建用户 `admin` / 密码 `admin`，并 **打日志**（登录后请改密）。
 - **查询日志**：多字段、永久存 DB；管理端 **查删**；Dashboard 查询量 = **客户端请求次数**。
+- **配置热更新**：无 5s 全量轮询；`Reload` 串行；单实例加载失败保留旧 snap 并向 API 报错；管理员资料与上游组创建/改名不 SyncNow；UDP 绑定失败无定时自愈（见 forwarding skill）；URL 拉取成功与 syncListeners 成功写入系统日志。
 
 ## 常用命令
 

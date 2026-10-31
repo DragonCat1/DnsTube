@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"regexp"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -43,6 +44,13 @@ type Engine struct {
 	queryTotalTimeout    time.Duration
 	maxConcurrentQueries int
 	udpHandlersWG        sync.WaitGroup
+
+	// ruleCompile 按 ruleID 缓存编译结果，Reload 时按内容指纹复用。
+	ruleCompileMu sync.Mutex
+	ruleCompile   map[int32]ruleCompileCache
+
+	// reloadMu 串行整个 Reload（读库 + 换 snap），避免并发 Reload 旧结果后写覆盖新配置。
+	reloadMu sync.Mutex
 }
 
 func NewEngine(st *store.Store, log *slog.Logger, upstreamTimeout, queryTotalTimeout time.Duration, maxConcurrentQueries int) *Engine {
@@ -69,35 +77,101 @@ func NewEngine(st *store.Store, log *slog.Logger, upstreamTimeout, queryTotalTim
 		exchangeClient:       NewDefaultExchangeClient(upstreamTimeout),
 		queryTotalTimeout:    queryTotalTimeout,
 		maxConcurrentQueries: maxConcurrentQueries,
+		ruleCompile:          make(map[int32]ruleCompileCache),
+	}
+}
+
+// keepCompileFromSnap 将旧 snap 中的规则 ID 记入 keep，避免 prune 掉仍在用的编译缓存。
+func keepCompileFromSnap(snap *instanceSnap, keep map[int32]struct{}) {
+	if snap == nil {
+		return
+	}
+	for _, r := range snap.rules {
+		keep[r.ruleID] = struct{}{}
+	}
+	for _, r := range snap.domainMap {
+		keep[r.ruleID] = struct{}{}
 	}
 }
 
 func (e *Engine) Reload(ctx context.Context) error {
+	e.reloadMu.Lock()
+	defer e.reloadMu.Unlock()
+
 	instances, err := e.store.ListInstances(ctx)
 	if err != nil {
 		return err
 	}
+
+	e.mu.RLock()
+	oldSnaps := e.snaps
+	e.mu.RUnlock()
+
 	next := make(map[int32]*instanceSnap)
+	keepCompile := make(map[int32]struct{})
+	var loadErrs []error
 	for _, inst := range instances {
-		snap, err := e.loadInstance(ctx, inst)
-		if err != nil {
-			e.log.Error("load instance", "id", inst.ID, "err", err)
+		snap, loadErr := e.loadInstance(ctx, inst, keepCompile)
+		if loadErr != nil {
+			e.log.Error("load instance", "id", inst.ID, "err", loadErr)
+			loadErrs = append(loadErrs, fmt.Errorf("instance %d: %w", inst.ID, loadErr))
+			// 瞬时读库失败时沿用旧 snap，避免该实例从内存消失并被 syncListeners 拆掉监听。
+			if old := oldSnaps[inst.ID]; old != nil {
+				next[inst.ID] = old
+				keepCompileFromSnap(old, keepCompile)
+			}
 			continue
 		}
 		next[inst.ID] = snap
 	}
+	e.pruneRuleCompile(keepCompile)
 	e.mu.Lock()
 	e.snaps = next
 	e.mu.Unlock()
+	if len(loadErrs) > 0 {
+		return errors.Join(loadErrs...)
+	}
 	return nil
 }
 
-func (e *Engine) loadInstance(ctx context.Context, inst store.DNSInstance) (*instanceSnap, error) {
+// pruneRuleCompile 去掉已不存在的规则编译缓存。
+func (e *Engine) pruneRuleCompile(keep map[int32]struct{}) {
+	e.ruleCompileMu.Lock()
+	defer e.ruleCompileMu.Unlock()
+	for id := range e.ruleCompile {
+		if _, ok := keep[id]; !ok {
+			delete(e.ruleCompile, id)
+		}
+	}
+}
+
+// compileRuleCached 按内容指纹复用或重新编译规则模式。
+func (e *Engine) compileRuleCached(ctx context.Context, r store.ForwardRule) (regexps []*regexp.Regexp, domains []string, err error) {
+	fp := ruleCompileFingerprint(r)
+	e.ruleCompileMu.Lock()
+	if c, ok := e.ruleCompile[r.ID]; ok && c.fp == fp {
+		regexps, domains = c.regexps, c.domains
+		e.ruleCompileMu.Unlock()
+		return regexps, domains, nil
+	}
+	e.ruleCompileMu.Unlock()
+
+	regexps, domains, err = compilePatternsForEngine(ctx, r)
+	if err != nil {
+		return nil, nil, err
+	}
+	e.ruleCompileMu.Lock()
+	e.ruleCompile[r.ID] = ruleCompileCache{fp: fp, regexps: regexps, domains: domains}
+	e.ruleCompileMu.Unlock()
+	return regexps, domains, nil
+}
+
+func (e *Engine) loadInstance(ctx context.Context, inst store.DNSInstance, keepCompile map[int32]struct{}) (*instanceSnap, error) {
 	recs, err := e.store.ListRecordsByInstance(ctx, inst.ID)
 	if err != nil {
 		return nil, err
 	}
-	rulesDB, err := e.store.ListForwardRules(ctx, inst.ID)
+	rulesDB, err := e.store.ListForwardRulesForEngine(ctx, inst.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +188,8 @@ func (e *Engine) loadInstance(ctx context.Context, inst store.DNSInstance) (*ins
 		if r.Disabled {
 			continue
 		}
-		pats, domains, compErr := compilePatternsForEngine(ctx, r)
+		keepCompile[r.ID] = struct{}{}
+		pats, domains, compErr := e.compileRuleCached(ctx, r)
 		if compErr != nil {
 			e.log.Warn("skip forward rule", "id", r.ID, "err", compErr)
 			continue
@@ -195,15 +270,17 @@ func (e *Engine) RefreshAllURLPatterns(ctx context.Context) error {
 			e.log.Error("marshal resolved pattern entries", "rule_id", r.ID, "err", mErr)
 			continue
 		}
+		changed := PatternFetchContentChanged(r, body, enc)
 		if err := e.store.UpdateForwardRulePatternFetch(ctx, r.ID, body, count, time.Now().UTC(), enc); err != nil {
 			e.log.Error("update forward rule pattern fetch", "rule_id", r.ID, "err", err)
 			continue
 		}
+		LogPatternFetchSuccess(e.log, r.ID, r.PatternRuleCount, count, changed, PatternFetchSourceScheduled)
 	}
 	return e.Reload(ctx)
 }
 
-// Start launches periodic reload, syncs UDP listeners, until ctx is cancelled.
+// Start 加载配置并同步 UDP 监听；配置热更新仅由 SyncNow / URL 拉取后的 Reload 触发（无周期全量轮询）。
 func (e *Engine) Start(ctx context.Context) error {
 	e.rootCtx = ctx
 	if err := e.Reload(ctx); err != nil {
@@ -216,36 +293,44 @@ func (e *Engine) Start(ctx context.Context) error {
 	go e.queryLogFlushLoop(ctx)
 
 	_ = e.syncListeners(ctx)
-
-	tick := time.NewTicker(5 * time.Second)
-	e.wg.Add(1)
-	go func() {
-		defer e.wg.Done()
-		defer tick.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-tick.C:
-				if err := e.Reload(context.Background()); err != nil {
-					e.log.Error("reload dns config", "err", err)
-				}
-				_ = e.syncListeners(ctx)
-			}
-		}
-	}()
 	return nil
 }
 
-func (e *Engine) syncListeners(ctx context.Context) error {
-	type wantT struct {
-		bind   string
-		paused bool
+type listenerWant struct {
+	bind   string
+	paused bool
+}
+
+// listenersWantUnchanged 判断当前监听与目标 bind/paused 是否完全一致（可跳过调和）。
+func listenersWantUnchanged(want map[int32]listenerWant, listeners map[int32]context.CancelFunc, binds map[int32]string) bool {
+	for id, w := range want {
+		if w.paused {
+			if _, ok := listeners[id]; ok {
+				return false
+			}
+			continue
+		}
+		if binds[id] != w.bind {
+			return false
+		}
+		if _, ok := listeners[id]; !ok {
+			return false
+		}
 	}
+	for id := range listeners {
+		w, ok := want[id]
+		if !ok || w.paused || binds[id] != w.bind {
+			return false
+		}
+	}
+	return true
+}
+
+func (e *Engine) syncListeners(ctx context.Context) error {
 	e.mu.RLock()
-	want := make(map[int32]wantT)
+	want := make(map[int32]listenerWant)
 	for id, snap := range e.snaps {
-		want[id] = wantT{
+		want[id] = listenerWant{
 			bind:   fmt.Sprintf("%s:%d", snap.instance.ListenAddr, snap.instance.ListenPort),
 			paused: snap.instance.Paused,
 		}
@@ -255,11 +340,32 @@ func (e *Engine) syncListeners(ctx context.Context) error {
 	e.listenerMu.Lock()
 	defer e.listenerMu.Unlock()
 
+	wantedActive := 0
+	for _, w := range want {
+		if !w.paused {
+			wantedActive++
+		}
+	}
+
 	for eid := range e.listenerErr {
 		if _, ok := want[eid]; !ok {
 			delete(e.listenerErr, eid)
 		}
 	}
+
+	// 目标与当前完全一致：跳过取消/重建与 150ms sleep，仍记成功日志。
+	if listenersWantUnchanged(want, e.listeners, e.listenerBind) {
+		e.log.Info("dns listeners synced",
+			"changed", false,
+			"wanted", wantedActive,
+			"running", len(e.listeners),
+			"started", 0,
+			"stopped", 0,
+		)
+		return nil
+	}
+
+	started, stopped := 0, 0
 
 	for id, cancel := range e.listeners {
 		w, ok := want[id]
@@ -267,6 +373,7 @@ func (e *Engine) syncListeners(ctx context.Context) error {
 			cancel()
 			delete(e.listeners, id)
 			delete(e.listenerBind, id)
+			stopped++
 		}
 	}
 
@@ -284,6 +391,7 @@ func (e *Engine) syncListeners(ctx context.Context) error {
 			can()
 			delete(e.listeners, id)
 			delete(e.listenerBind, id)
+			stopped++
 		}
 
 		bind := w.bind
@@ -314,7 +422,7 @@ func (e *Engine) syncListeners(ctx context.Context) error {
 				}
 				prevMsg := e.listenerErr[id]
 				e.listenerErr[id] = msg
-				// 定时 sync 会反复重试绑定；错误未变时不再刷 Error，避免每 ~5s 一条重复日志
+				// 绑定错误未变时不再刷 Error（下次 SyncNow / 启动再试时若仍失败则静默）
 				if prevMsg != msg {
 					e.log.Error("udp listen", "bind", bind, "instance_id", id, "err", err)
 				}
@@ -327,7 +435,16 @@ func (e *Engine) syncListeners(ctx context.Context) error {
 		delete(e.listenerErr, id)
 		e.listeners[id] = cancel
 		e.listenerBind[id] = bind
+		started++
 	}
+
+	e.log.Info("dns listeners synced",
+		"changed", true,
+		"wanted", wantedActive,
+		"running", len(e.listeners),
+		"started", started,
+		"stopped", stopped,
+	)
 	return nil
 }
 
@@ -398,15 +515,19 @@ func (e *Engine) serveUDPLoop(ctx context.Context, pc net.PacketConn, instID int
 }
 
 // SyncNow reloads DB and UDP listeners (call after API mutations).
+// Reload 若部分实例加载失败会返回 error，但仍先完成 snap 替换（失败实例保留旧 snap）；
+// 此处仍调用 syncListeners，使成功加载的实例监听变更生效，再把 Reload 错误返回给 API。
 func (e *Engine) SyncNow(ctx context.Context) error {
-	if err := e.Reload(ctx); err != nil {
-		return err
-	}
+	reloadErr := e.Reload(ctx)
 	rc := e.rootCtx
 	if rc == nil {
 		rc = context.Background()
 	}
-	return e.syncListeners(rc)
+	syncErr := e.syncListeners(rc)
+	if reloadErr != nil {
+		return reloadErr
+	}
+	return syncErr
 }
 
 // ListenerErrors 返回当前 UDP 绑定失败的实例及错误信息（如端口占用）；无错误时可能返回 nil。
